@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#17231d" />
+    <title>双语视频背诵训练</title>
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Shadowing Lab</p>
+          <h1>双语视频背诵训练</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="exportBtn" title="导出数据" aria-label="导出数据">⇩</button>
+          <button class="primary-button" id="newSessionBtn">新建训练</button>
+        </div>
+      </header>
+
+      <section class="dashboard-strip" aria-label="训练概览">
+        <article class="metric">
+          <span>连续天数</span>
+          <strong id="streakDays">0</strong>
+        </article>
+        <article class="metric">
+          <span>本周完成</span>
+          <strong id="weekRate">0%</strong>
+        </article>
+        <article class="metric">
+          <span>韩语均分</span>
+          <strong id="koAvg">-</strong>
+        </article>
+        <article class="metric">
+          <span>英语均分</span>
+          <strong id="enAvg">-</strong>
+        </article>
+        <article class="metric">
+          <span>表达块</span>
+          <strong id="expressionCount">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="left-panel">
+          <div class="panel-heading">
+            <h2>今日训练</h2>
+            <span id="todayLabel"></span>
+          </div>
+
+          <label class="field">
+            <span>主题</span>
+            <input id="topicInput" type="text" placeholder="例如：今天的工作复盘" />
+          </label>
+
+          <label class="field">
+            <span>中文原意</span>
+            <textarea id="sourceInput" rows="5" placeholder="写下你真正想表达的中文意思"></textarea>
+          </label>
+
+          <div class="language-switch" role="tablist" aria-label="语言切换">
+            <button class="switch-button active" data-lang="ko" role="tab">韩语</button>
+            <button class="switch-button" data-lang="en" role="tab">英语</button>
+          </div>
+
+          <div class="file-row">
+            <label class="small-field">
+              <span>视频链接</span>
+              <input id="videoUrlInput" type="text" placeholder="MP4、YouTube 或 HeyGen 嵌入链接" />
+            </label>
+            <button class="secondary-button video-load-button" id="loadVideoBtn">加载</button>
+            <label class="file-picker">
+              <input id="videoFileInput" type="file" accept="video/*" />
+              <span>选择文件</span>
+            </label>
+          </div>
+          <div class="video-feedback" id="videoFeedback" role="status"></div>
+
+          <label class="field">
+            <span>文稿 / 字幕</span>
+            <textarea id="scriptInput" rows="7" placeholder="粘贴 HeyGen 生成的韩语或英语文稿"></textarea>
+          </label>
+
+          <div class="timer-box">
+            <div>
+              <span>训练计时</span>
+              <strong id="timerDisplay">00:00</strong>
+            </div>
+            <button class="secondary-button" id="timerBtn">开始</button>
+          </div>
+
+          <button class="primary-button full" id="saveBtn">保存今天</button>
+        </aside>
+
+        <section class="training-panel">
+          <div class="panel-heading">
+            <h2 id="activeLangTitle">韩语训练</h2>
+            <div class="mode-tabs" role="tablist" aria-label="训练模式">
+              <button class="mode-button active" data-mode="listen">听</button>
+              <button class="mode-button" data-mode="repeat">跟读</button>
+              <button class="mode-button" data-mode="shadow">影子</button>
+              <button class="mode-button" data-mode="recall">脱稿</button>
+            </div>
+          </div>
+
+          <div class="mode-status" id="modeStatus">
+            <div>
+              <strong id="modeStatusTitle">完整聆听</strong>
+              <span id="modeStatusText">正常速度播放，先熟悉内容与节奏。</span>
+            </div>
+            <b id="modeRate">1.0×</b>
+          </div>
+
+          <div class="video-frame">
+            <video id="videoPlayer" controls playsinline></video>
+            <iframe
+              id="embedPlayer"
+              title="嵌入视频播放器"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowfullscreen
+            ></iframe>
+            <div class="empty-video" id="emptyVideo">
+              <strong>放入视频后开始训练</strong>
+              <span>支持视频文件、MP4、YouTube 与嵌入链接</span>
+            </div>
+          </div>
+
+          <div class="script-card">
+            <div class="script-toolbar">
+              <button class="secondary-button" id="scriptVisibilityBtn" hidden>临时查看文稿</button>
+              <button class="secondary-button" id="splitBtn">按句拆分</button>
+              <button class="secondary-button" id="clearDoneBtn">清空勾选</button>
+            </div>
+            <div class="sentence-list" id="sentenceList"></div>
+          </div>
+
+          <div class="score-grid">
+            <label>
+              <span>准确度</span>
+              <input class="score-input" data-score="accuracy" type="range" min="1" max="5" step="1" />
+              <b id="accuracyValue">3</b>
+            </label>
+            <label>
+              <span>流利度</span>
+              <input class="score-input" data-score="fluency" type="range" min="1" max="5" step="1" />
+              <b id="fluencyValue">3</b>
+            </label>
+            <label>
+              <span>发音</span>
+              <input class="score-input" data-score="pronunciation" type="range" min="1" max="5" step="1" />
+              <b id="pronunciationValue">3</b>
+            </label>
+            <label>
+              <span>语调</span>
+              <input class="score-input" data-score="intonation" type="range" min="1" max="5" step="1" />
+              <b id="intonationValue">3</b>
+            </label>
+            <label>
+              <span>脱稿率</span>
+              <input class="score-input" data-score="recall" type="range" min="0" max="100" step="5" />
+              <b id="recallValue">60%</b>
+            </label>
+          </div>
+        </section>
+
+        <aside class="right-panel">
+          <div class="panel-heading">
+            <h2>表达库</h2>
+            <button class="icon-button" id="addExpressionBtn" title="新增表达" aria-label="新增表达">＋</button>
+          </div>
+
+          <div class="expression-form" id="expressionForm">
+            <label class="field">
+              <span>表达块</span>
+              <input id="expressionText" type="text" placeholder="例如：요즘 깨달은 게 있는데" />
+            </label>
+            <label class="field">
+              <span>中文意思</span>
+              <input id="expressionMeaning" type="text" placeholder="最近我意识到一件事" />
+            </label>
+            <label class="field">
+              <span>替换练习</span>
+              <textarea id="expressionVariant" rows="3" placeholder="换一个场景自己造句"></textarea>
+            </label>
+            <button class="secondary-button full" id="saveExpressionBtn">加入表达库</button>
+          </div>
+
+          <div class="expression-list" id="expressionList"></div>
+
+          <div class="history-panel">
+            <div class="panel-heading compact">
+              <h2>最近训练</h2>
+            </div>
+            <div id="historyList" class="history-list"></div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
