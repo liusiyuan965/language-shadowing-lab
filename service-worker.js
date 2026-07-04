@@ -1,11 +1,11 @@
-const CACHE_NAME = "language-growth-v7";
+const CACHE_NAME = "language-growth-v8";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles-v7.css",
-  "./app-v7.js",
-  "./manifest.webmanifest?v=7",
-  "./icon.svg?v=7",
+  "./styles-v8.css",
+  "./app-v8.js",
+  "./manifest.webmanifest?v=8",
+  "./icon.svg?v=8",
 ];
 
 self.addEventListener("install", (event) => {
