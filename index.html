@@ -7,6 +7,268 @@
     <title>双语成长记录</title>
     <link rel="icon" href="./icon.svg?v=4" type="image/svg+xml" />
     <link rel="manifest" href="./manifest.webmanifest?v=4" />
+    <link rel="stylesheet" href="./styles-v5.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">LANGUAGE GROWTH LOG</p>
+          <h1>双语成长记录</h1>
+          <p class="subtitle">每天留下一个主题，两种语言，一次真实进步。</p>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="exportBtn" title="导出记录" aria-label="导出记录">⇩</button>
+          <button class="primary-button" id="newRecordBtn">新建记录</button>
+        </div>
+      </header>
+
+      <section class="dashboard-strip" aria-label="成长概览">
+        <article class="metric">
+          <span>连续完成</span>
+          <strong id="streakDays">0</strong>
+          <small>天</small>
+        </article>
+        <article class="metric">
+          <span>本周完成</span>
+          <strong id="weekCount">0</strong>
+          <small>／7 天</small>
+        </article>
+        <article class="metric">
+          <span>累计视频</span>
+          <strong id="videoCount">0</strong>
+          <small>条</small>
+        </article>
+        <article class="metric">
+          <span>累计练习</span>
+          <strong id="totalMinutes">0</strong>
+          <small>分钟</small>
+        </article>
+        <article class="metric">
+          <span>平均脱稿率</span>
+          <strong id="recallAverage">-</strong>
+          <small>双语平均</small>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="record-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="section-label">DAILY LOG</p>
+              <h2 id="formTitle">记录今天</h2>
+            </div>
+            <span id="recordState">新记录</span>
+          </div>
+
+          <div class="record-starter">
+            <div>
+              <span>今日灵感</span>
+              <strong id="dailyPrompt"></strong>
+            </div>
+            <button class="text-button" id="nextPromptBtn" type="button">换一条</button>
+          </div>
+
+          <div class="form-grid compact-grid">
+            <label class="field">
+              <span>日期</span>
+              <input id="dateInput" type="date" />
+            </label>
+            <label class="field">
+              <span>内容类型</span>
+              <select id="categoryInput">
+                <option value="日常">日常</option>
+                <option value="工作">工作</option>
+                <option value="观点">观点</option>
+                <option value="故事">故事</option>
+                <option value="复盘">复盘</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>单条视频</span>
+              <div class="input-unit">
+                <input id="durationInput" type="number" min="0.5" max="30" step="0.5" value="1" />
+                <b>分钟</b>
+              </div>
+            </label>
+            <label class="field">
+              <span>练习投入</span>
+              <div class="input-unit">
+                <input id="practiceMinutesInput" type="number" min="0" max="600" step="5" value="20" />
+                <b>分钟</b>
+              </div>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>主题</span>
+            <input id="topicInput" type="text" placeholder="例如：介绍我今天完成的一件事" />
+          </label>
+
+          <label class="field">
+            <span>中文原意</span>
+            <textarea id="sourceInput" rows="4" placeholder="简要记录这次真正想表达的内容"></textarea>
+          </label>
+
+          <label class="field">
+            <span>本次目标</span>
+            <input id="goalInput" type="text" placeholder="例如：不看稿完整讲完，并自然使用 3 个表达" />
+          </label>
+
+          <section class="language-record" aria-labelledby="koHeading">
+            <div class="language-heading">
+              <div>
+                <span class="language-dot ko"></span>
+                <h3 id="koHeading">韩语视频</h3>
+              </div>
+              <label class="check-control">
+                <input id="koCompleted" type="checkbox" />
+                <span>已完成</span>
+              </label>
+            </div>
+            <label class="field">
+              <span>视频链接</span>
+              <input id="koUrl" type="url" placeholder="粘贴 HeyGen 分享链接" />
+            </label>
+            <div class="form-grid language-grid">
+              <label class="field">
+                <span>自评分</span>
+                <input id="koScore" type="number" min="1" max="5" step="0.1" placeholder="1–5" />
+              </label>
+              <label class="field">
+                <span>脱稿率</span>
+                <div class="input-unit">
+                  <input id="koRecall" type="number" min="0" max="100" step="5" placeholder="0" />
+                  <b>%</b>
+                </div>
+              </label>
+              <label class="field">
+                <span>重复次数</span>
+                <input id="koRepeats" type="number" min="0" max="99" step="1" value="0" />
+              </label>
+            </div>
+            <label class="field">
+              <span>留下的表达</span>
+              <input id="koExpression" type="text" placeholder="记录今天真正想带走的一句韩语" />
+            </label>
+            <label class="field">
+              <span>一句复盘</span>
+              <input id="koNote" type="text" placeholder="今天最需要改进的地方" />
+            </label>
+          </section>
+
+          <section class="language-record" aria-labelledby="enHeading">
+            <div class="language-heading">
+              <div>
+                <span class="language-dot en"></span>
+                <h3 id="enHeading">英语视频</h3>
+              </div>
+              <label class="check-control">
+                <input id="enCompleted" type="checkbox" />
+                <span>已完成</span>
+              </label>
+            </div>
+            <label class="field">
+              <span>视频链接</span>
+              <input id="enUrl" type="url" placeholder="粘贴 HeyGen 分享链接" />
+            </label>
+            <div class="form-grid language-grid">
+              <label class="field">
+                <span>自评分</span>
+                <input id="enScore" type="number" min="1" max="5" step="0.1" placeholder="1–5" />
+              </label>
+              <label class="field">
+                <span>脱稿率</span>
+                <div class="input-unit">
+                  <input id="enRecall" type="number" min="0" max="100" step="5" placeholder="0" />
+                  <b>%</b>
+                </div>
+              </label>
+              <label class="field">
+                <span>重复次数</span>
+                <input id="enRepeats" type="number" min="0" max="99" step="1" value="0" />
+              </label>
+            </div>
+            <label class="field">
+              <span>留下的表达</span>
+              <input id="enExpression" type="text" placeholder="记录今天真正想带走的一句英语" />
+            </label>
+            <label class="field">
+              <span>一句复盘</span>
+              <input id="enNote" type="text" placeholder="今天最需要改进的地方" />
+            </label>
+          </section>
+
+          <div class="form-actions">
+            <button class="danger-button" id="deleteBtn" hidden>删除</button>
+            <button class="primary-button save-button" id="saveBtn">保存记录</button>
+          </div>
+          <p class="save-feedback" id="saveFeedback" role="status"></p>
+        </aside>
+
+        <section class="growth-panel">
+          <div class="growth-header">
+            <div>
+              <p class="section-label">PROGRESS</p>
+              <h2>成长趋势</h2>
+            </div>
+            <div class="legend" aria-label="图表图例">
+              <span><i class="legend-ko"></i>韩语</span>
+              <span><i class="legend-en"></i>英语</span>
+            </div>
+          </div>
+
+          <div class="week-progress">
+            <div>
+              <strong>本周目标</strong>
+              <span id="weekProgressText">0 / 7 天</span>
+            </div>
+            <div class="progress-track"><span id="weekProgressBar"></span></div>
+          </div>
+
+          <section class="record-snapshot" id="recordSnapshot" aria-live="polite"></section>
+
+          <div class="trend-section">
+            <div class="section-heading">
+              <h3>双语自评分趋势</h3>
+              <span>最近 10 次记录</span>
+            </div>
+            <div class="chart-wrap">
+              <svg id="trendChart" viewBox="0 0 720 260" role="img" aria-label="韩语与英语评分趋势图"></svg>
+            </div>
+          </div>
+
+          <div class="heatmap-section">
+            <div class="section-heading">
+              <h3>最近 28 天</h3>
+              <span>颜色越深，完成语言越多</span>
+            </div>
+            <div class="heatmap" id="heatmap"></div>
+          </div>
+
+          <div class="history-section">
+            <div class="section-heading">
+              <h3>全部记录</h3>
+              <span id="historyCount">0 条</span>
+            </div>
+            <div class="history-list" id="historyList"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app-v5.js"></script>
+  </body>
+</html>
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07100f" />
+    <title>双语成长记录</title>
+    <link rel="icon" href="./icon.svg?v=4" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest?v=4" />
     <link rel="stylesheet" href="./styles.css?v=5" />
   </head>
   <body>
