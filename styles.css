@@ -743,6 +743,35 @@ select:focus {
   white-space: nowrap;
 }
 
+.video-link {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--cyan);
+  background: rgba(88, 214, 186, 0.06);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.video-link:hover,
+.video-link:focus-visible {
+  border-color: var(--cyan);
+  background: var(--cyan-soft);
+  outline: none;
+}
+
+.video-link.compact {
+  min-height: 30px;
+  margin-top: 9px;
+}
+
 .snapshot-goal {
   margin: 14px 0 0;
   color: var(--muted);
@@ -888,7 +917,7 @@ select:focus {
 }
 
 .history-item:hover,
-.history-item:focus-visible,
+.history-item:focus-within,
 .history-item.active {
   border-color: var(--cyan);
   outline: none;
@@ -896,6 +925,22 @@ select:focus {
 
 .history-item.active {
   background: #10211d;
+}
+
+.history-select {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.history-select:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 4px;
 }
 
 .history-topline {
@@ -987,6 +1032,26 @@ select:focus {
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.video-actions .video-link {
+  flex: 1 1 130px;
+}
+
+.video-link.ko {
+  color: #ff9a8b;
+}
+
+.video-link.en {
+  color: var(--green);
 }
 
 .empty-state {
