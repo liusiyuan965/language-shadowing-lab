@@ -502,26 +502,29 @@ function renderHistory() {
       const done = isComplete(record);
       const totalRepeats = Number(record.ko.repeats || 0) + Number(record.en.repeats || 0);
       return `
-        <button class="history-item ${record.id === state.currentId ? "active" : ""}" data-record-id="${record.id}">
-          <div class="history-topline">
-            <span>${escapeHtml(record.date)}</span>
-            <span class="category-chip">${escapeHtml(record.category || "日常")}</span>
-            <span class="completion-text ${done ? "done" : ""}">${done ? "双语完成" : `完成 ${completedLanguageCount(record)}/2`}</span>
-          </div>
-          <div class="history-main">
-            <strong>${escapeHtml(record.topic || "未命名记录")}</strong>
-            <span class="history-note">${escapeHtml(record.source || "暂无中文摘要")}</span>
-          </div>
-          <div class="history-data">
-            <span><b>${record.duration}</b> 分钟视频</span>
-            <span><b>${record.practiceMinutes || 0}</b> 分钟练习</span>
-            <span><b>${totalRepeats}</b> 次重复</span>
-          </div>
-          <div class="history-languages">
-            ${historyLanguage("ko", "韩语", record.ko)}
-            ${historyLanguage("en", "英语", record.en)}
-          </div>
-        </button>
+        <article class="history-item ${record.id === state.currentId ? "active" : ""}">
+          <button class="history-select" type="button" data-record-id="${record.id}">
+            <div class="history-topline">
+              <span>${escapeHtml(record.date)}</span>
+              <span class="category-chip">${escapeHtml(record.category || "日常")}</span>
+              <span class="completion-text ${done ? "done" : ""}">${done ? "双语完成" : `完成 ${completedLanguageCount(record)}/2`}</span>
+            </div>
+            <div class="history-main">
+              <strong>${escapeHtml(record.topic || "未命名记录")}</strong>
+              <span class="history-note">${escapeHtml(record.source || "暂无中文摘要")}</span>
+            </div>
+            <div class="history-data">
+              <span><b>${record.duration}</b> 分钟视频</span>
+              <span><b>${record.practiceMinutes || 0}</b> 分钟练习</span>
+              <span><b>${totalRepeats}</b> 次重复</span>
+            </div>
+            <div class="history-languages">
+              ${historyLanguage("ko", "韩语", record.ko)}
+              ${historyLanguage("en", "英语", record.en)}
+            </div>
+          </button>
+          ${videoActions(record)}
+        </article>
       `;
     })
     .join("");
@@ -578,14 +581,38 @@ function renderSnapshot() {
 }
 
 function snapshotLanguage(code, label, language) {
+  const videoUrl = safeVideoUrl(language.url);
   return `
     <div class="snapshot-language ${code}">
       <span>${label}</span>
       <strong>${formatScore(language.score)}<small> / 5</small></strong>
       <b>脱稿 ${formatPercent(language.recall)}</b>
       <p>${escapeHtml(language.expression || language.note || "尚未记录重点表达")}</p>
+      ${videoUrl ? `<a class="video-link compact" href="${escapeHtml(videoUrl)}" target="_blank" rel="noopener noreferrer">打开视频 <span aria-hidden="true">↗</span></a>` : ""}
     </div>
   `;
+}
+
+function videoActions(record) {
+  const koUrl = safeVideoUrl(record.ko.url);
+  const enUrl = safeVideoUrl(record.en.url);
+  if (!koUrl && !enUrl) return "";
+  return `
+    <div class="video-actions">
+      ${koUrl ? `<a class="video-link ko" href="${escapeHtml(koUrl)}" target="_blank" rel="noopener noreferrer">韩语视频 <span aria-hidden="true">↗</span></a>` : ""}
+      ${enUrl ? `<a class="video-link en" href="${escapeHtml(enUrl)}" target="_blank" rel="noopener noreferrer">英语视频 <span aria-hidden="true">↗</span></a>` : ""}
+    </div>
+  `;
+}
+
+function safeVideoUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function averageRecall(record) {
@@ -864,7 +891,7 @@ $("#historyList").addEventListener("click", (event) => {
 
 if ("serviceWorker" in navigator && window.location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker-v7.js");
+    navigator.serviceWorker.register("./service-worker-v8.js");
   });
 }
 
