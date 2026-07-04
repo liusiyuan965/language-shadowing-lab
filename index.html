@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#07100f" />
     <title>双语成长记录</title>
     <link rel="icon" href="./icon.svg?v=4" type="image/svg+xml" />
-    <link rel="manifest" href="./manifest.webmanifest?v=6" />
-    <link rel="stylesheet" href="./styles-v6.css" />
+    <link rel="manifest" href="./manifest.webmanifest?v=7" />
+    <link rel="stylesheet" href="./styles-v7.css" />
   </head>
   <body>
     <main class="app-shell">
@@ -18,6 +18,10 @@
           <p class="subtitle">每天留下一个主题，两种语言，一次真实进步。</p>
         </div>
         <div class="top-actions">
+          <button class="sync-status is-local" id="syncStatusBtn" type="button" title="账户与同步">
+            <span class="sync-dot" aria-hidden="true"></span>
+            <span id="syncStatusText">仅本机</span>
+          </button>
           <button class="icon-button" id="exportBtn" title="导出记录" aria-label="导出记录">⇩</button>
           <button class="primary-button" id="newRecordBtn">新建记录</button>
         </div>
@@ -257,6 +261,35 @@
       </section>
     </main>
 
-    <script src="./app-v6.js"></script>
+    <dialog class="auth-dialog" id="authDialog">
+      <div class="auth-dialog-heading">
+        <div>
+          <p class="section-label">CLOUD SYNC</p>
+          <h2>跨设备同步</h2>
+        </div>
+        <button class="icon-button dialog-close" id="closeAuthDialogBtn" type="button" aria-label="关闭">×</button>
+      </div>
+      <div id="signedOutPanel">
+        <p class="auth-copy">输入邮箱，我们会发送一封登录邮件。其他设备使用同一邮箱登录后，记录会自动合并。</p>
+        <label class="field">
+          <span>邮箱</span>
+          <input id="authEmailInput" type="email" autocomplete="email" placeholder="name@example.com" />
+        </label>
+        <button class="primary-button auth-submit" id="sendMagicLinkBtn" type="button">发送登录邮件</button>
+      </div>
+      <div id="signedInPanel" hidden>
+        <p class="auth-account-label">当前账户</p>
+        <strong class="auth-email" id="authEmailText"></strong>
+        <div class="auth-state-row">
+          <span class="sync-dot" aria-hidden="true"></span>
+          <span id="authSyncDetail">云端同步已开启</span>
+        </div>
+        <button class="danger-button auth-submit" id="signOutBtn" type="button">退出登录</button>
+      </div>
+      <p class="auth-feedback" id="authFeedback" role="status"></p>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./app-v7.js"></script>
   </body>
 </html>
