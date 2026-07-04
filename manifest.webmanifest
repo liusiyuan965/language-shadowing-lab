@@ -4,6 +4,23 @@
   "description": "记录韩语和英语视频背诵成果与成长趋势",
   "start_url": "./",
   "display": "standalone",
+  "background_color": "#07100f",
+  "theme_color": "#07100f",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
+{
+  "name": "双语成长记录",
+  "short_name": "双语成长",
+  "description": "记录韩语和英语视频背诵成果与成长趋势",
+  "start_url": "./",
+  "display": "standalone",
   "background_color": "#f3f4ef",
   "theme_color": "#17231d",
   "icons": [
