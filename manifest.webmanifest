@@ -1,7 +1,7 @@
 {
-  "name": "双语视频背诵训练",
-  "short_name": "双语背诵",
-  "description": "韩语和英语视频影子跟读与背诵训练",
+  "name": "双语成长记录",
+  "short_name": "双语成长",
+  "description": "记录韩语和英语视频背诵成果与成长趋势",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f3f4ef",
