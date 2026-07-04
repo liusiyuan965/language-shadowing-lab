@@ -1,4 +1,4 @@
-const CACHE_NAME = "shadowing-lab-v2";
+const CACHE_NAME = "language-growth-v3";
 const APP_ASSETS = [
   "./",
   "./index.html",
