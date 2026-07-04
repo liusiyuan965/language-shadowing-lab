@@ -1,5 +1,9 @@
 const storeKey = "language-growth-log-v2";
 const legacyStoreKey = "shadowing-lab-v1";
+const supabaseUrl = "https://hztkkzrahtgrqzyuyros.supabase.co";
+const supabaseAnonKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6dGtrenJhaHRncnF6eXV5cm9zIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTQ2MTYsImV4cCI6MjA5ODczMDYxNn0.fm1Cf2qpwPv5hdNFLDh0fe2LNWSIjWTtnyQQH_d-QvY";
+const cloud = globalThis.supabase?.createClient?.(supabaseUrl, supabaseAnonKey) || null;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -71,6 +75,8 @@ const promptTemplates = [
 
 let promptIndex = new Date().getDate() % promptTemplates.length;
 const state = loadState();
+let currentUser = null;
+let syncInProgress = false;
 
 function localDate(date = new Date()) {
   const year = date.getFullYear();
@@ -131,6 +137,7 @@ function loadState() {
       return {
         currentId: parsed.currentId || null,
         records: Array.isArray(parsed.records) ? parsed.records.map(normalizeRecord) : [],
+        deletedIds: parsed.deletedIds && typeof parsed.deletedIds === "object" ? parsed.deletedIds : {},
       };
     } catch {
       localStorage.removeItem(storeKey);
@@ -143,9 +150,12 @@ function loadState() {
 }
 
 function normalizeRecord(record) {
+  const createdAt = Number(record.createdAt) || Date.now();
   return {
     ...emptyRecord(),
     ...record,
+    createdAt,
+    updatedAt: Number(record.updatedAt) || createdAt,
     duration: positiveNumber(record.duration, 1),
     practiceMinutes: Math.max(0, Number(record.practiceMinutes) || 0),
     ko: { ...emptyLanguage(), ...(record.ko || {}) },
@@ -154,7 +164,7 @@ function normalizeRecord(record) {
 }
 
 function migrateLegacyData() {
-  const fallback = { currentId: null, records: [] };
+  const fallback = { currentId: null, records: [], deletedIds: {} };
   const saved = localStorage.getItem(legacyStoreKey);
   if (!saved) return fallback;
 
@@ -179,6 +189,7 @@ function migrateLegacyData() {
     return {
       currentId: records.some((item) => item.id === legacy.currentId) ? legacy.currentId : null,
       records,
+      deletedIds: {},
     };
   } catch {
     return fallback;
@@ -239,6 +250,7 @@ function readLanguage(languageFields) {
 
 function readForm() {
   const existing = currentRecord();
+  const now = Date.now();
   return {
     id: existing?.id || makeId(),
     date: fields.date.value || localDate(),
@@ -248,7 +260,8 @@ function readForm() {
     duration: positiveNumber(fields.duration.value, 1),
     practiceMinutes: Math.max(0, Number(fields.practiceMinutes.value) || 0),
     goal: fields.goal.value.trim(),
-    createdAt: existing?.createdAt || Date.now(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
     ko: readLanguage(fields.ko),
     en: readLanguage(fields.en),
   };
@@ -295,7 +308,8 @@ function saveRecord() {
   saveState();
   renderAll();
   writeForm(record);
-  $("#saveFeedback").textContent = "已保存，成长曲线已更新。";
+  $("#saveFeedback").textContent = currentUser ? "已保存，正在同步到云端。" : "已保存到本机。登录后可跨设备同步。";
+  void syncRecord(record);
 }
 
 function newRecord() {
@@ -318,11 +332,14 @@ function deleteRecord() {
   const record = currentRecord();
   if (!record) return;
   if (!window.confirm(`删除“${record.topic || record.date}”这条记录？`)) return;
+  const deletedAt = Date.now();
+  state.deletedIds[record.id] = { timestamp: deletedAt, date: record.date };
   state.records = state.records.filter((item) => item.id !== record.id);
   state.currentId = null;
   saveState();
-  writeForm(emptyRecord());
+  writeForm(starterRecord());
   renderAll();
+  void syncDeletion(record, deletedAt);
 }
 
 function isComplete(record) {
@@ -612,11 +629,228 @@ function downloadJson() {
   URL.revokeObjectURL(url);
 }
 
+function recordTimestamp(record) {
+  return Number(record.updatedAt) || Number(record.createdAt) || 0;
+}
+
+function setSyncStatus(mode, text) {
+  $("#syncStatusBtn").className = `sync-status is-${mode}`;
+  $("#syncStatusText").textContent = text;
+  $("#authSyncDetail").textContent =
+    mode === "syncing"
+      ? "正在合并本机与云端记录"
+      : mode === "error"
+        ? "同步遇到问题，本机记录仍然安全"
+        : "云端同步已开启";
+}
+
+function openAuthDialog() {
+  $("#authFeedback").textContent = "";
+  $("#signedOutPanel").hidden = Boolean(currentUser);
+  $("#signedInPanel").hidden = !currentUser;
+  $("#authEmailText").textContent = currentUser?.email || "";
+  $("#authDialog").showModal();
+}
+
+function closeAuthDialog() {
+  $("#authDialog").close();
+}
+
+async function sendMagicLink() {
+  if (!cloud) {
+    $("#authFeedback").textContent = "同步服务暂时未加载，请检查网络后重试。";
+    return;
+  }
+  const email = $("#authEmailInput").value.trim();
+  if (!email || !$("#authEmailInput").checkValidity()) {
+    $("#authFeedback").textContent = "请输入有效邮箱。";
+    return;
+  }
+
+  const button = $("#sendMagicLinkBtn");
+  button.disabled = true;
+  button.textContent = "正在发送";
+  $("#authFeedback").textContent = "";
+  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const { error } = await cloud.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo },
+  });
+  button.disabled = false;
+  button.textContent = "发送登录邮件";
+  $("#authFeedback").textContent = error ? `发送失败：${error.message}` : "登录邮件已发送，请在邮箱中点击链接。";
+}
+
+async function signOut() {
+  if (!cloud) return;
+  await cloud.auth.signOut();
+  currentUser = null;
+  setSyncStatus("local", "仅本机");
+  closeAuthDialog();
+}
+
+function cloudRow(record) {
+  return {
+    id: record.id,
+    user_id: currentUser.id,
+    record_date: record.date,
+    record_data: record,
+    client_updated_at: recordTimestamp(record),
+  };
+}
+
+async function syncRecord(record) {
+  if (!cloud || !currentUser) return;
+  setSyncStatus("syncing", "同步中");
+  const { error } = await cloud.from("learning_records").upsert(cloudRow(record), { onConflict: "id" });
+  setSyncStatus(error ? "error" : "synced", error ? "同步失败" : "已同步");
+}
+
+async function syncDeletion(record, deletedAt) {
+  if (!cloud || !currentUser) return;
+  setSyncStatus("syncing", "同步中");
+  const { error } = await cloud.from("learning_records").upsert(
+    {
+      id: record.id,
+      user_id: currentUser.id,
+      record_date: record.date,
+      record_data: { id: record.id, deletedAt },
+      client_updated_at: deletedAt,
+    },
+    { onConflict: "id" },
+  );
+  setSyncStatus(error ? "error" : "synced", error ? "同步失败" : "已同步");
+}
+
+async function syncAllRecords() {
+  if (!cloud || !currentUser || syncInProgress) return;
+  syncInProgress = true;
+  setSyncStatus("syncing", "同步中");
+
+  const { data: cloudRows, error } = await cloud
+    .from("learning_records")
+    .select("id,record_data,client_updated_at");
+
+  if (error) {
+    syncInProgress = false;
+    setSyncStatus("error", "同步失败");
+    return;
+  }
+
+  const localById = new Map(state.records.map((record) => [record.id, record]));
+  const cloudById = new Map((cloudRows || []).map((row) => [row.id, row]));
+  const pendingRows = [];
+
+  for (const row of cloudRows || []) {
+    const local = localById.get(row.id);
+    const localDeleted = state.deletedIds[row.id];
+    const localDeletedAt = Number(localDeleted?.timestamp || localDeleted || 0);
+    const cloudTimestamp = Number(row.client_updated_at) || 0;
+
+    const cloudDeletedAt = Number(row.record_data?.deletedAt) || 0;
+    if (cloudDeletedAt) {
+      if (cloudDeletedAt >= recordTimestamp(local || {}) && cloudDeletedAt >= localDeletedAt) {
+        localById.delete(row.id);
+        state.deletedIds[row.id] = {
+          timestamp: cloudDeletedAt,
+          date: row.record_data?.date || local?.date || localDate(),
+        };
+      }
+      continue;
+    }
+
+    if (localDeletedAt > cloudTimestamp) {
+      pendingRows.push({
+        id: row.id,
+        user_id: currentUser.id,
+        record_date: localDeleted.date || localDate(),
+        record_data: { id: row.id, deletedAt: localDeletedAt },
+        client_updated_at: localDeletedAt,
+      });
+    } else if (!local || cloudTimestamp > recordTimestamp(local)) {
+      localById.set(row.id, normalizeRecord(row.record_data));
+      delete state.deletedIds[row.id];
+    } else if (recordTimestamp(local) > cloudTimestamp) {
+      pendingRows.push(cloudRow(local));
+    }
+  }
+
+  for (const record of localById.values()) {
+    if (!cloudById.has(record.id) && !state.deletedIds[record.id]) pendingRows.push(cloudRow(record));
+  }
+
+  for (const [id, deleted] of Object.entries(state.deletedIds)) {
+    if (cloudById.has(id)) continue;
+    const timestamp = Number(deleted?.timestamp || deleted || Date.now());
+    pendingRows.push({
+      id,
+      user_id: currentUser.id,
+      record_date: deleted?.date || localDate(),
+      record_data: { id, deletedAt: timestamp },
+      client_updated_at: timestamp,
+    });
+  }
+
+  if (pendingRows.length) {
+    const { error: uploadError } = await cloud
+      .from("learning_records")
+      .upsert(pendingRows, { onConflict: "id" });
+    if (uploadError) {
+      syncInProgress = false;
+      setSyncStatus("error", "同步失败");
+      return;
+    }
+  }
+
+  state.records = [...localById.values()];
+  if (state.currentId && !localById.has(state.currentId)) state.currentId = null;
+  saveState();
+  renderAll();
+  syncInProgress = false;
+  setSyncStatus("synced", "已同步");
+}
+
+async function applySession(session) {
+  currentUser = session?.user || null;
+  $("#signedOutPanel").hidden = Boolean(currentUser);
+  $("#signedInPanel").hidden = !currentUser;
+  $("#authEmailText").textContent = currentUser?.email || "";
+  if (currentUser) {
+    await syncAllRecords();
+  } else {
+    setSyncStatus("local", "仅本机");
+  }
+}
+
+async function initializeCloudSync() {
+  if (!cloud) {
+    setSyncStatus("error", "服务未加载");
+    return;
+  }
+  const {
+    data: { session },
+  } = await cloud.auth.getSession();
+  await applySession(session);
+  cloud.auth.onAuthStateChange((_event, nextSession) => {
+    void applySession(nextSession);
+  });
+}
+
 $("#saveBtn").addEventListener("click", saveRecord);
 $("#newRecordBtn").addEventListener("click", newRecord);
 $("#nextPromptBtn").addEventListener("click", nextPrompt);
 $("#deleteBtn").addEventListener("click", deleteRecord);
 $("#exportBtn").addEventListener("click", downloadJson);
+$("#syncStatusBtn").addEventListener("click", openAuthDialog);
+$("#closeAuthDialogBtn").addEventListener("click", closeAuthDialog);
+$("#sendMagicLinkBtn").addEventListener("click", sendMagicLink);
+$("#signOutBtn").addEventListener("click", signOut);
+$("#authDialog").addEventListener("click", (event) => {
+  if (event.target === $("#authDialog")) closeAuthDialog();
+});
+$("#authEmailInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") void sendMagicLink();
+});
 
 $("#historyList").addEventListener("click", (event) => {
   const item = event.target.closest("[data-record-id]");
@@ -630,488 +864,11 @@ $("#historyList").addEventListener("click", (event) => {
 
 if ("serviceWorker" in navigator && window.location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=5");
+    navigator.serviceWorker.register("./service-worker-v7.js");
   });
 }
 
 writeForm(currentRecord() || starterRecord());
 renderAll();
-const storeKey = "language-growth-log-v2";
-const legacyStoreKey = "shadowing-lab-v1";
-
-const $ = (selector) => document.querySelector(selector);
-
-const fields = {
-  date: $("#dateInput"),
-  duration: $("#durationInput"),
-  topic: $("#topicInput"),
-  source: $("#sourceInput"),
-  ko: {
-    url: $("#koUrl"),
-    completed: $("#koCompleted"),
-    score: $("#koScore"),
-    recall: $("#koRecall"),
-    repeats: $("#koRepeats"),
-    note: $("#koNote"),
-  },
-  en: {
-    url: $("#enUrl"),
-    completed: $("#enCompleted"),
-    score: $("#enScore"),
-    recall: $("#enRecall"),
-    repeats: $("#enRepeats"),
-    note: $("#enNote"),
-  },
-};
-
-const state = loadState();
-
-function localDate(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function makeId() {
-  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function emptyLanguage() {
-  return {
-    url: "",
-    completed: false,
-    score: null,
-    recall: null,
-    repeats: 0,
-    note: "",
-  };
-}
-
-function emptyRecord() {
-  return {
-    id: makeId(),
-    date: localDate(),
-    topic: "",
-    source: "",
-    duration: 1,
-    createdAt: Date.now(),
-    ko: emptyLanguage(),
-    en: emptyLanguage(),
-  };
-}
-
-function loadState() {
-  const saved = localStorage.getItem(storeKey);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      return {
-        currentId: parsed.currentId || null,
-        records: Array.isArray(parsed.records) ? parsed.records.map(normalizeRecord) : [],
-      };
-    } catch {
-      localStorage.removeItem(storeKey);
-    }
-  }
-
-  const migrated = migrateLegacyData();
-  localStorage.setItem(storeKey, JSON.stringify(migrated));
-  return migrated;
-}
-
-function normalizeRecord(record) {
-  return {
-    ...emptyRecord(),
-    ...record,
-    duration: positiveNumber(record.duration, 1),
-    ko: { ...emptyLanguage(), ...(record.ko || {}) },
-    en: { ...emptyLanguage(), ...(record.en || {}) },
-  };
-}
-
-function migrateLegacyData() {
-  const fallback = { currentId: null, records: [] };
-  const saved = localStorage.getItem(legacyStoreKey);
-  if (!saved) return fallback;
-
-  try {
-    const legacy = JSON.parse(saved);
-    const sessions = Array.isArray(legacy.sessions) ? legacy.sessions : [];
-    const records = sessions.map((session, index) => {
-      const ko = session.languages?.ko || {};
-      const en = session.languages?.en || {};
-      const duration = Math.max(Number(ko.seconds) || 0, Number(en.seconds) || 0) / 60;
-      return {
-        id: session.id || makeId(),
-        date: session.date || localDate(),
-        topic: session.topic || "",
-        source: session.source || "",
-        duration: duration > 0 ? Number(duration.toFixed(1)) : 1,
-        createdAt: Date.now() - (sessions.length - index) * 1000,
-        ko: legacyLanguage(ko, session.completed),
-        en: legacyLanguage(en, session.completed),
-      };
-    });
-    return {
-      currentId: records.some((item) => item.id === legacy.currentId) ? legacy.currentId : null,
-      records,
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-function legacyLanguage(language, completed) {
-  return {
-    url: language.videoUrl || "",
-    completed: Boolean(completed),
-    score: legacyAverage(language.scores),
-    recall: nullableNumber(language.scores?.recall),
-    repeats: 0,
-    note: "",
-  };
-}
-
-function legacyAverage(scores) {
-  if (!scores) return null;
-  const values = [scores.accuracy, scores.fluency, scores.pronunciation, scores.intonation]
-    .map(nullableNumber)
-    .filter((item) => item !== null);
-  if (!values.length) return null;
-  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
-}
-
-function nullableNumber(value) {
-  if (value === "" || value === null || value === undefined) return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function positiveNumber(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : fallback;
-}
-
-function saveState() {
-  localStorage.setItem(storeKey, JSON.stringify(state));
-}
-
-function currentRecord() {
-  return state.records.find((record) => record.id === state.currentId) || null;
-}
-
-function readLanguage(languageFields) {
-  return {
-    url: languageFields.url.value.trim(),
-    completed: languageFields.completed.checked,
-    score: nullableNumber(languageFields.score.value),
-    recall: nullableNumber(languageFields.recall.value),
-    repeats: Math.max(0, Number(languageFields.repeats.value) || 0),
-    note: languageFields.note.value.trim(),
-  };
-}
-
-function readForm() {
-  const existing = currentRecord();
-  return {
-    id: existing?.id || makeId(),
-    date: fields.date.value || localDate(),
-    topic: fields.topic.value.trim(),
-    source: fields.source.value.trim(),
-    duration: positiveNumber(fields.duration.value, 1),
-    createdAt: existing?.createdAt || Date.now(),
-    ko: readLanguage(fields.ko),
-    en: readLanguage(fields.en),
-  };
-}
-
-function writeLanguage(languageFields, language) {
-  languageFields.url.value = language.url || "";
-  languageFields.completed.checked = Boolean(language.completed);
-  languageFields.score.value = language.score ?? "";
-  languageFields.recall.value = language.recall ?? "";
-  languageFields.repeats.value = language.repeats ?? 0;
-  languageFields.note.value = language.note || "";
-}
-
-function writeForm(record = emptyRecord()) {
-  fields.date.value = record.date;
-  fields.duration.value = record.duration;
-  fields.topic.value = record.topic;
-  fields.source.value = record.source;
-  writeLanguage(fields.ko, record.ko);
-  writeLanguage(fields.en, record.en);
-
-  const isEditing = Boolean(state.currentId);
-  $("#formTitle").textContent = isEditing ? "编辑记录" : "记录今天";
-  $("#recordState").textContent = isEditing ? record.date : "新记录";
-  $("#deleteBtn").hidden = !isEditing;
-  $("#saveFeedback").textContent = "";
-}
-
-function saveRecord() {
-  const record = readForm();
-  const index = state.records.findIndex((item) => item.id === record.id);
-  if (index >= 0) {
-    state.records[index] = record;
-  } else {
-    state.records.push(record);
-  }
-  state.currentId = record.id;
-  saveState();
-  renderAll();
-  writeForm(record);
-  $("#saveFeedback").textContent = "已保存，成长曲线已更新。";
-}
-
-function newRecord() {
-  state.currentId = null;
-  saveState();
-  writeForm(emptyRecord());
-  renderHistory();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function deleteRecord() {
-  const record = currentRecord();
-  if (!record) return;
-  if (!window.confirm(`删除“${record.topic || record.date}”这条记录？`)) return;
-  state.records = state.records.filter((item) => item.id !== record.id);
-  state.currentId = null;
-  saveState();
-  writeForm(emptyRecord());
-  renderAll();
-}
-
-function isComplete(record) {
-  return Boolean(record.ko.completed && record.en.completed);
-}
-
-function completedLanguageCount(record) {
-  return Number(Boolean(record.ko.completed)) + Number(Boolean(record.en.completed));
-}
-
-function startOfWeek() {
-  const date = new Date();
-  const day = date.getDay() || 7;
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() - day + 1);
-  return date;
-}
-
-function recordsThisWeek() {
-  const weekStart = startOfWeek();
-  return state.records.filter((record) => isComplete(record) && new Date(`${record.date}T00:00:00`) >= weekStart);
-}
-
-function calculateStreak() {
-  const completedDates = new Set(state.records.filter(isComplete).map((record) => record.date));
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  let streak = 0;
-
-  if (!completedDates.has(localDate(cursor))) cursor.setDate(cursor.getDate() - 1);
-  while (completedDates.has(localDate(cursor))) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
-}
-
-function renderMetrics() {
-  const weekCount = new Set(recordsThisWeek().map((record) => record.date)).size;
-  const videoCount = state.records.reduce((sum, record) => sum + completedLanguageCount(record), 0);
-  const totalMinutes = state.records.reduce(
-    (sum, record) => sum + positiveNumber(record.duration, 0) * completedLanguageCount(record),
-    0,
-  );
-  const recalls = state.records.flatMap((record) =>
-    ["ko", "en"]
-      .filter((language) => record[language].completed)
-      .map((language) => nullableNumber(record[language].recall))
-      .filter((value) => value !== null),
-  );
-  const recallAverage = recalls.length
-    ? `${Math.round(recalls.reduce((sum, value) => sum + value, 0) / recalls.length)}%`
-    : "-";
-
-  $("#streakDays").textContent = calculateStreak();
-  $("#weekCount").textContent = weekCount;
-  $("#videoCount").textContent = videoCount;
-  $("#totalMinutes").textContent = Number(totalMinutes.toFixed(1));
-  $("#recallAverage").textContent = recallAverage;
-  $("#weekProgressText").textContent = `${weekCount} / 7 天`;
-  $("#weekProgressBar").style.width = `${Math.min(100, (weekCount / 7) * 100)}%`;
-}
-
-function renderTrend() {
-  const svg = $("#trendChart");
-  const records = state.records
-    .filter((record) => record.ko.score !== null || record.en.score !== null)
-    .slice()
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
-    .slice(-10);
-
-  if (!records.length) {
-    svg.innerHTML = `<text class="chart-empty" x="360" y="130" text-anchor="middle">保存评分后，这里会出现双语成长曲线</text>`;
-    return;
-  }
-
-  const width = 720;
-  const height = 260;
-  const left = 42;
-  const right = 18;
-  const top = 18;
-  const bottom = 38;
-  const chartWidth = width - left - right;
-  const chartHeight = height - top - bottom;
-  const xFor = (index) => left + (records.length === 1 ? chartWidth / 2 : (index / (records.length - 1)) * chartWidth);
-  const yFor = (score) => top + ((5 - score) / 4) * chartHeight;
-
-  const grid = [1, 2, 3, 4, 5]
-    .map((value) => {
-      const y = yFor(value);
-      return `<line class="chart-grid" x1="${left}" y1="${y}" x2="${width - right}" y2="${y}"></line>
-        <text class="chart-label" x="${left - 12}" y="${y + 4}" text-anchor="middle">${value}</text>`;
-    })
-    .join("");
-
-  const labels = records
-    .map((record, index) => {
-      const label = record.date.slice(5).replace("-", "/");
-      return `<text class="chart-label" x="${xFor(index)}" y="${height - 12}" text-anchor="middle">${label}</text>`;
-    })
-    .join("");
-
-  const series = ["ko", "en"]
-    .map((language) => {
-      const points = records
-        .map((record, index) => ({ x: xFor(index), y: record[language].score }))
-        .filter((point) => point.y !== null);
-      if (!points.length) return "";
-      const linePoints = points.map((point) => `${point.x},${yFor(point.y)}`).join(" ");
-      const circles = points
-        .map(
-          (point) =>
-            `<circle class="chart-point-${language}" cx="${point.x}" cy="${yFor(point.y)}" r="4"></circle>`,
-        )
-        .join("");
-      return `<polyline class="chart-line-${language}" points="${linePoints}"></polyline>${circles}`;
-    })
-    .join("");
-
-  svg.innerHTML = `${grid}${labels}${series}`;
-}
-
-function renderHeatmap() {
-  const container = $("#heatmap");
-  const days = [];
-  const cursor = new Date();
-  cursor.setHours(0, 0, 0, 0);
-  cursor.setDate(cursor.getDate() - 27);
-
-  for (let index = 0; index < 28; index += 1) {
-    const date = localDate(cursor);
-    const level = Math.min(
-      2,
-      state.records
-        .filter((record) => record.date === date)
-        .reduce((sum, record) => sum + completedLanguageCount(record), 0),
-    );
-    days.push(
-      `<div class="heat-day level-${level}" title="${date}：完成 ${level} 种语言"><span>${cursor.getDate()}</span></div>`,
-    );
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  container.innerHTML = days.join("");
-}
-
-function renderHistory() {
-  const container = $("#historyList");
-  const records = state.records
-    .slice()
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-  $("#historyCount").textContent = `${records.length} 条`;
-
-  if (!records.length) {
-    container.innerHTML = `<div class="empty-state">第一条记录保存后，成长会从这里开始累积。</div>`;
-    return;
-  }
-
-  container.innerHTML = records
-    .map((record) => {
-      const done = isComplete(record);
-      return `
-        <button class="history-item ${record.id === state.currentId ? "active" : ""}" data-record-id="${record.id}">
-          <div class="history-main">
-            <span class="history-date">${escapeHtml(record.date)} · ${record.duration} 分钟</span>
-            <strong>${escapeHtml(record.topic || "未命名记录")}</strong>
-            <span class="history-note">${escapeHtml(record.source || "暂无中文摘要")}</span>
-          </div>
-          <div class="history-scores">
-            <span class="score-chip ko">韩 ${formatScore(record.ko.score)}</span>
-            <span class="score-chip en">英 ${formatScore(record.en.score)}</span>
-          </div>
-          <span class="completion-mark ${done ? "done" : ""}" title="${done ? "双语完成" : "尚未全部完成"}">
-            ${done ? "✓" : completedLanguageCount(record)}
-          </span>
-        </button>
-      `;
-    })
-    .join("");
-}
-
-function formatScore(score) {
-  return score === null || score === undefined ? "-" : Number(score).toFixed(1);
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function renderAll() {
-  renderMetrics();
-  renderTrend();
-  renderHeatmap();
-  renderHistory();
-}
-
-function downloadJson() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `language-growth-${localDate()}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-$("#saveBtn").addEventListener("click", saveRecord);
-$("#newRecordBtn").addEventListener("click", newRecord);
-$("#deleteBtn").addEventListener("click", deleteRecord);
-$("#exportBtn").addEventListener("click", downloadJson);
-
-$("#historyList").addEventListener("click", (event) => {
-  const item = event.target.closest("[data-record-id]");
-  if (!item) return;
-  state.currentId = item.dataset.recordId;
-  saveState();
-  writeForm(currentRecord());
-  renderHistory();
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
-
-if ("serviceWorker" in navigator && window.location.protocol !== "file:") {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js?v=4");
-  });
-}
-
-writeForm(currentRecord() || emptyRecord());
-renderAll();
+void initializeCloudSync();
+window.addEventListener("online", () => void syncAllRecords());
