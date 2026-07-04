@@ -1,0 +1,17 @@
+{
+  "name": "双语视频背诵训练",
+  "short_name": "双语背诵",
+  "description": "韩语和英语视频影子跟读与背诵训练",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f4ef",
+  "theme_color": "#17231d",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
